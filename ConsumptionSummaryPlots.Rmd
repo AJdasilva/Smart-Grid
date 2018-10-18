@@ -1,0 +1,50 @@
+---
+title: "SomePlots"
+author: "Lance Wrobel"
+date: "October 17, 2018"
+output: html_document
+---
+This is a notebook of me playing around with the data a little bit.
+
+
+First clean the data somewhat.
+```{r}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+apartment9_electical_2014_clean<-apartment9_electical_2014 %>% separate(time,c("date","time"),' ') %>%
+  separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":")
+
+apartment_weather_2014_clean <- apartment_weather_2014 
+apartment_weather_2014_clean$time<-as_datetime(apartment_weather_2014_clean$time) #time is hourly
+
+apartment_weather_2014_clean <-apartment_weather_2014_clean %>% separate(time,c("date","time"),' ') %>%
+  separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":")
+
+```
+
+
+Plot energy consumption over months
+```{r}
+
+#plot energy consumption by different months
+ggplot(apartment9_electical_2014_clean, aes(month,`Power kW`))+
+  geom_bar(stat="identity")
+
+```
+
+Plot energy consumption for each hour of the day
+```{r}
+#plot energy consumption over course of 24 hour day
+ggplot(apartment9_electical_2014_clean, aes(hour,`Power kW`))+
+         geom_bar(stat="identity")+theme(axis.text.x=element_text(angle=60,hjust=1))
+```
+A weather data plot
+```{r}
+#
+ggplot(apartment_weather_2014_clean, aes(month,temperature),na.rm=TRUE)+
+  geom_bar(stat="identity")
+```
+
