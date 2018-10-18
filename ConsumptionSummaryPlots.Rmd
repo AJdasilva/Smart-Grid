@@ -15,6 +15,8 @@ library(readr)
 #untar("apartment-weather.tar.gz",list=TRUE)  ## check contents
 #untar("apartment-weather.tar.gz")
 #apartment9_electical_2014 <- read_csv("../../apartment/2014/Apt9_2014.csv")
+#apartment9_electical_2014 <- read_csv("../../apartment/2014/Apt9_2014.csv",header = FALSE)
+#colnames(apartment9_electical_2014) = c("time","Power kW")
 #apartment_weather_2014 <- read_csv("../../apartment-weather/apartment2014.csv")
 ```
 
