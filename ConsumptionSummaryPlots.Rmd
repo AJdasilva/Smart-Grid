@@ -4,12 +4,13 @@ author: "Lance Wrobel"
 date: "October 17, 2018"
 output: html_document
 ---
+This is a notebook of me playing around with the data a little bit, a work in progress.
 
-This is a notebook of me playing around with the data a little bit.
-
-First download apartment-electrical.tar.gz and apartment-weather.tar.gz from http://traces.cs.umass.edu/index.php/Smart/Smart into workspace. Uncomment (remove pound signs) to run below code chunk. Adjust file paths if necessary.
+First download apartment-electrical.tar.gz and apartment-weather.tar.gz from http://traces.cs.umass.edu/index.php/Smart/Smart into workspace. Uncomment 
+(remove pound signs) to run below code chunk. Adjust file paths for your computer.
 ```{r}
 library(readr)
+library(plyr)
 #untar("apartment-electrical.tar.gz",list=TRUE)  ## check contents
 #untar("apartment-electrical.tar.gz")
 #untar("apartment-weather.tar.gz",list=TRUE)  ## check contents
@@ -17,7 +18,24 @@ library(readr)
 #apartment9_electical_2014 <- read_csv("../../apartment/2014/Apt9_2014.csv",header = FALSE)
 #colnames(apartment9_electical_2014) = c("time","Power kW")
 #apartment_weather_2014 <- read_csv("../../apartment-weather/apartment2014.csv")
+
+filenames = list.files(path = "C:\\Users\\lance\\Documents\\R\\win-library\\3.4\\AMATHProj\\apartment\\2014", pattern="*.csv")
+setwd("C:\\Users\\lance\\Documents\\R\\win-library\\3.4\\AMATHProj\\apartment\\2014")
+
+#all_dfs = lapply(filenames, read_csv,col_names = c("time","Power kW")) #old code, keep commented
+
+read_csv_filename <- function(filename){
+    ret <- read_csv(filename,col_names = c("time","Power kW"))
+    m = nchar(filename)
+    ret$apartment <- substr(filename,1,m-4) #preserve apartment name
+    return(ret)
+}
+
+big_electrical_df_2014 <- ldply(filenames, read_csv_filename)
+
+setwd("C:\\Users\\lance\\Documents\\R\\win-library\\3.4\\AMATHProj")
 ```
+
 
 First clean the data somewhat.
 ```{r}
@@ -26,8 +44,11 @@ library(dplyr)
 library(ggplot2)
 library(lubridate)
 
-apartment9_electical_2014_clean<-apartment9_electical_2014 %>% separate(time,c("date","time"),' ') %>%
+big_electrical_df_2014_clean<-big_electrical_df_2014 %>% separate(time,c("date","time"),' ') %>%
   separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":")
+
+apartment_weather_2014_clean <- apartment_weather_2014 
+apartment_weather_2014_clean$time<-as_datetime(apartment_weather_2014_clean$time) #time is hourly
 
 apartment_weather_2014_clean <- apartment_weather_2014 
 apartment_weather_2014_clean$time<-as_datetime(apartment_weather_2014_clean$time) #time is hourly
@@ -37,22 +58,21 @@ apartment_weather_2014_clean <-apartment_weather_2014_clean %>% separate(time,c(
 
 ```
 
-
 Plot energy consumption over months
 ```{r}
 
 #plot energy consumption by different months
-ggplot(apartment9_electical_2014_clean, aes(month,`Power kW`))+
+ggplot(big_electrical_df_2014_clean, aes(month,`Power kW`))+
   geom_bar(stat="identity")
 
 ```
-
 Plot energy consumption for each hour of the day
 ```{r}
 #plot energy consumption over course of 24 hour day
-ggplot(apartment9_electical_2014_clean, aes(hour,`Power kW`))+
+ggplot(big_electrical_df_2014_clean, aes(hour,`Power kW`))+
          geom_bar(stat="identity")+theme(axis.text.x=element_text(angle=60,hjust=1))
 ```
+
 A weather data plot
 ```{r}
 temp = aggregate(list(temperature=apartment_weather_2014_clean$temperature),list(month =factor(apartment_weather_2014_clean$month)),mean) 
