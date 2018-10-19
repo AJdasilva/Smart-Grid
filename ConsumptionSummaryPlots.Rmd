@@ -57,26 +57,29 @@ apartment_weather_2014_clean <-apartment_weather_2014_clean %>% separate(time,c(
   separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":")
 
 ```
-
 Plot energy consumption over months
 ```{r}
 
 #plot energy consumption by different months
-ggplot(big_electrical_df_2014_clean, aes(month,`Power kW`))+
-  geom_bar(stat="identity")
+temp_1 = aggregate(list(`Power kW`=big_electrical_df_2014_clean$`Power kW`),list(month =factor(big_electrical_df_2014_clean$month)),mean) 
+
+ggplot(temp_1, aes(month,Power.kW,na.rm=TRUE))+
+         geom_bar(stat="identity")+theme(axis.text.x=element_text(angle=60,hjust=1))+ggtitle("Average energy consumption per month")
 
 ```
-Plot energy consumption for each hour of the day
+
+Plot average energy consumption for each hour of the day
 ```{r}
 #plot energy consumption over course of 24 hour day
-ggplot(big_electrical_df_2014_clean, aes(hour,`Power kW`))+
-         geom_bar(stat="identity")+theme(axis.text.x=element_text(angle=60,hjust=1))
-```
+temp_1 = aggregate(list(`Power kW`=big_electrical_df_2014_clean$`Power kW`),list(hour =factor(big_electrical_df_2014_clean$hour)),mean) 
 
-A weather data plot
+ggplot(temp_1, aes(hour,Power.kW,na.rm=TRUE))+
+         geom_bar(stat="identity")+theme(axis.text.x=element_text(angle=60,hjust=1))+ggtitle("Average energy consumption per hour")
+```
+A weather data plot for average temperature per month
 ```{r}
 temp = aggregate(list(temperature=apartment_weather_2014_clean$temperature),list(month =factor(apartment_weather_2014_clean$month)),mean) 
 ggplot(temp, aes(x=month,y=temperature,na.rm=TRUE))+
-  geom_bar(stat="identity")
+  geom_bar(stat="identity")+ggtitle("Average Temperature per month")
 ```
 
