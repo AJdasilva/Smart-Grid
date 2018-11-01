@@ -45,16 +45,16 @@ for i in range(len(type)):
 # Plot vertices, color-coordinated by their type:
 plt.figure(1)
 for i in range(len(v_id)):
-    plt.plot(lat[i], long[i], color=vertex_color[i], marker=".", ls="None")
-plt.xlim([46,56])
+    plt.plot(long[i], lat[i], color=vertex_color[i], marker=".", ls="None")
+plt.xlim([5,16])
 mx = MultipleLocator(.1)
 plt.axes().xaxis.set_minor_locator(mx)
-plt.ylim([5,16])
+plt.ylim([46,56])
 my = MultipleLocator(.1)
 plt.axes().yaxis.set_minor_locator(my)
 plt.grid(b=True, which="both")
-plt.ylabel("Longitude")
-plt.xlabel("Latitude")
+plt.xlabel("Longitude")
+plt.ylabel("Latitude")
 plt.title("OSM Data - Vertices")
 legend_vertices = [Line2D([0], [0], marker='o', ls='None', color='b', label='Substation'),
                   Line2D([0], [0], marker='o', ls='None', color='r', label='Plant'),
@@ -100,16 +100,16 @@ for i in range(len(edge_id)):
 # Plot the edges, color-coordinated by voltage:
 plt.figure(2)
 for i in range(len(edge_id)):
-    plt.plot(edge_lats[i], edge_longs[i], marker=".", c=edge_color[i])
-plt.xlim([46,56])
+    plt.plot(edge_longs[i], edge_lats[i], marker=".", c=edge_color[i])
+plt.xlim([5,16])
 mx = MultipleLocator(.1)
 plt.axes().xaxis.set_minor_locator(mx)
-plt.ylim([5,16])
+plt.ylim([46,56])
 my = MultipleLocator(.1)
 plt.axes().yaxis.set_minor_locator(my)
 plt.grid(b=True, which="both")
-plt.ylabel("Longitude")
-plt.xlabel("Latitude")
+plt.xlabel("Longitude")
+plt.ylabel("Latitude")
 plt.title("OSM Data - Edges")
 legend_edges = [Line2D([0], [0], marker='o', color='b', label='220000'),
                 Line2D([0], [0], marker='o', color='c', label='300000'),
@@ -124,18 +124,18 @@ plt.close()
 # Plot both the edges & the vertices. Both are color coordinated so it's pretty busy.
 plt.figure(3)
 for i in range(len(edge_id)):
-    plt.plot(edge_lats[i], edge_longs[i], c=edge_color[i], marker="None")
+    plt.plot(edge_longs[i], edge_lats[i], c=edge_color[i], marker="None")
 for i in range(len(v_id)):
-    plt.plot(lat[i], long[i], color=vertex_color[i], marker=".", ls="None")
-plt.xlim([46,56])
+    plt.plot(long[i], lat[i], color=vertex_color[i], marker=".", ls="None")
+plt.xlim([5,16])
 mx = MultipleLocator(.1)
 plt.axes().xaxis.set_minor_locator(mx)
-plt.ylim([5,16])
+plt.ylim([46,56])
 my = MultipleLocator(.1)
 plt.axes().yaxis.set_minor_locator(my)
 plt.grid(b=False, which="both")
-plt.ylabel("Longitude")
-plt.xlabel("Latitude")
+plt.xlabel("Longitude")
+plt.ylabel("Latitude")
 plt.title("OSM Data - Vertices & Edges")
 # legend the same as prev. 2 plots
 plt.savefig("vertices_and_edges.pdf")
