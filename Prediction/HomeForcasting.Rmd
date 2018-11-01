@@ -1,0 +1,81 @@
+Load Packages
+```{r}
+library(readr)
+library(plyr)
+library(lubridate)
+library(magrittr)
+library(dplyr)
+library(tidyr)
+library(tibbletime)
+library(ggplot2)
+```
+
+
+Looking at Home D from the Umass SMART* repository
+```{r}
+untar("HomeD-electrical.tar",list=TRUE)  ## check contents
+untar("HomeD-electrical.tar")
+untar("HomeD-weather.tar",list=TRUE)  ## check contents
+untar("HomeD-weather.tar")
+
+```
+
+```{r}
+#your path to your R project, mine is EnergyForcasting
+your_path <- "C:\\Users\\lance\\Documents\\R\\win-library\\3.4\\EnergyForcasting"
+
+homeD_weather_2015<-read_csv(paste(your_path,"\\HomeD\\homeD2015.csv",sep=""))
+meter1_2015 <- read_csv(paste(your_path,"\\HomeD\\2015\\HomeD-meter1_2015.csv",sep=""))
+
+homeD_weather_2016<-read_csv(paste(your_path,"\\HomeD\\homeD2016.csv",sep=""))
+meter1_2016 <- read_csv(paste(your_path,"\\HomeD\\2016\\HomeD-meter1_2016.csv",sep=""))
+
+```
+
+```{r}
+
+colnames(meter1_2016)[1]<-"time" #do this to join data frames
+meter1_2016<-as_tbl_time(meter1_2016,index=time)
+
+meter1_2016_clean<-meter1_2016 %>% collapse_by("hourly") %>% group_by(time) %>%
+summarise_all(sum) #make electrical data hourly, was minute level
+
+#seperates time data into year month and hour,comment out if you dont want to use
+meter1_2016_clean<-meter1_2016_clean %>%separate(time,c("date","time"),' ') %>% separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":")%>% select(-minute,-second)
+
+colnames(meter1_2015)[1]<-"time" #do this to join data frames with weather
+homeD_weather_2015_clean <- homeD_weather_2015
+homeD_weather_2015_clean$time<-as_datetime(homeD_weather_2015$time) #time is hourly
+
+colnames(meter1_2016)[1]<-"time" 
+homeD_weather_2016_clean <- homeD_weather_2016
+homeD_weather_2016_clean$time<-as_datetime(homeD_weather_2016$time) 
+
+homeD_weather_electrical_2015_meter1<-inner_join(homeD_weather_2015_clean, meter1_2015, by = "time")
+
+homeD_weather_electrical_2016_meter1<-inner_join(homeD_weather_2016_clean, meter1_2016, by = "time")
+
+#put 2015 and 2016 data together
+homeD_weather_electrical_meter1<-rbind(homeD_weather_electrical_2015_meter1,homeD_weather_electrical_2016_meter1)
+
+homeD_weather_electrical_meter1 <-homeD_weather_electrical_meter1 %>% separate(time,c("date","time"),' ') %>% separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":") %>% select(-minute,-second)
+```
+
+
+```{r}
+temp_1 = aggregate(list(gen.kW=homeD_weather_electrical_meter1$`gen [kW]`),list(hour =factor(homeD_weather_electrical_meter1$hour)),mean) 
+
+ggplot(temp_1, aes(hour,gen.kW,na.rm=TRUE))+
+         geom_bar(stat="identity")+theme(axis.text.x=element_text(angle=60,hjust=1))+ggtitle("Average gen[kW] per hour for one meter, single Home D")
+```
+
+```{r}
+#this dataframe does not seperate the time
+#following line makes electrical data daily, was minute level
+meter1_2016_clean_nonsep<-meter1_2016 %>% collapse_by("daily") %>% group_by(time) %>%
+summarise_all(mean)  %>% filter(`gen [kW]` != 0)
+
+ggplot(meter1_2016_clean_nonsep,aes(time,`gen [kW]`))+geom_point()+ggtitle("Mean Daily gen [kW] for one meter,single home D")
+```
+
+
