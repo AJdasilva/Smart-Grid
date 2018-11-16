@@ -1,0 +1,166 @@
+---
+title: "ForecastingModelsDataCleaning"
+author: "Lance Wrobel"
+date: "November 8, 2018"
+output: html_document
+---
+
+```{r}
+library(readr)
+library(plyr)
+library(lubridate)
+library(magrittr)
+library(dplyr)
+library(tidyr)
+library(tibbletime)
+library(ggplot2)
+```
+```{r}
+#your path to your R project, mine is EnergyForcasting
+your_path <- "C:\\Users\\lance\\Documents\\R\\win-library\\3.4\\EnergyForcasting"
+
+homeD_weather_2015<-read_csv(paste(your_path,"\\HomeD\\homeD2015.csv",sep=""))
+meter1_2015 <- read_csv(paste(your_path,"\\HomeD\\2015\\HomeD-meter4_2015.csv",sep=""))
+
+homeD_weather_2016<-read_csv(paste(your_path,"\\HomeD\\homeD2016.csv",sep=""))
+meter1_2016 <- read_csv(paste(your_path,"\\HomeD\\2016\\HomeD-meter4_2016.csv",sep=""))
+
+```
+
+```{r}
+colnames(meter1_2016)[1]<-"time" #do this to join data frames
+meter1_2016 <- meter1_2016 %>% select(-`use [kW]`)
+colnames(meter1_2016)[3]<-"use [kW]" #do this to join data frames
+meter1_2016<-as_tbl_time(meter1_2016,index=time)
+
+meter1_2016_clean<-meter1_2016 %>% collapse_by("hourly") %>% group_by(time) %>%
+summarise_all(sum) #make electrical data hourly, was minute level
+
+#seperates time data into year month and hour,comment out if you dont want to use
+meter1_2016_clean<-meter1_2016_clean %>%separate(time,c("date","time"),' ') %>% separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":")%>% select(-minute,-second)
+
+homeD_weather_2016_clean <- homeD_weather_2016
+homeD_weather_2016_clean$time<-as_datetime(homeD_weather_2016_clean$time) 
+
+homeD_weather_electrical_2016_meter1<-inner_join(homeD_weather_2016_clean, meter1_2016, by = "time")
+
+homeD_weather_electrical_2016_meter1$time<-ymd_hms(homeD_weather_electrical_2016_meter1$time)
+
+homeD_weather_electrical_2016_meter1_2 <- homeD_weather_electrical_2016_meter1  %>% mutate(day_of_week = wday(time,label=TRUE)) #append day of week on end
+
+homeD_weather_electrical_2016_meter1_2$Weekend <- grepl("S.+",homeD_weather_electrical_2016_meter1_2$day_of_week)
+
+
+
+homeD_weather_electrical_2016_meter1_sep <-homeD_weather_electrical_2016_meter1_2 %>% separate(time,c("date","time"),' ') %>% separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":") 
+
+time_period<-function(df){
+  
+  n <- nrow(df)
+  df$time_interval<- rep(1,n)
+  for (i in 1:n) {
+    
+    row<-df[i,]
+    
+    if (row$hour <= 7){
+      df$time_interval[i] <- "early morning"
+
+    }
+    else if(7< row$hour && row$hour <= 12){
+      df$time_interval[i]  <- "morning"
+    }
+    else if(12< row$hour && row$hour <= 17){
+      df$time_interval[i]  <- "afternoon"
+    }
+    else if(17< row$hour && row$hour <= 19){
+      df$time_interval[i]  <- "evening"
+    }
+    else{
+      df$time_interval[i]  <- "late evening"
+    }
+  }
+  return(df);
+} 
+season_period<-function(df){
+  
+  n <- nrow(df)
+  df$season<- rep(1,n)
+  for (i in 1:n) {
+    
+    row<-df[i,]
+    
+    if (3 <= row$month && row$month <= 4){
+      df$season[i] <- "spring"
+    }
+    else if(5<= row$month && row$month <= 9){
+      df$season[i]  <- "summer"
+    }
+    else if(10<= row$month && row$month <= 11){
+      df$season[i]  <- "fall"
+      }
+    else if(row$month==12 || (0<=row$month && row$month<=2)){
+      df$season[i]  <- "winter"
+    }
+  }
+  return(df);
+} 
+
+homeD_weather_electrical_2016_meter1_sep$hour <- as.numeric(homeD_weather_electrical_2016_meter1_sep$hour)
+
+homeD_weather_electrical_2016_meter1_sep$month <- as.numeric(homeD_weather_electrical_2016_meter1_sep$month)
+
+
+homeD_weather_electrical_2016_meter1_sep_clean<-time_period(homeD_weather_electrical_2016_meter1_sep)
+homeD_weather_electrical_2016_meter1_sep_clean<-season_period(homeD_weather_electrical_2016_meter1_sep_clean)
+```
+
+```{r}
+
+previous_interval<-function(df){
+  
+  n <- nrow(df)
+  df$previous_interval_use<- rep(1,n)
+  for (i in 4:n) {
+    
+    current_row<-df[i,]
+    previous_row<-df[i-1,]
+    next_previous_row<-df[i-2,]
+    
+    total_previous_interval_use <- 0
+    
+    time_period<-current_row$time_interval
+    previous_time_period<-previous_row$time_interval
+    next_previous_time_period<-next_previous_row$time_interval
+    
+    if (time_period != previous_time_period){
+      
+      j=i-1
+      while (previous_time_period == next_previous_time_period && j>0){
+        total_previous_interval_use<-total_previous_interval_use+previous_row$`use [kW]`
+      
+        previous_row<-df[j,]
+        next_previous_row<-df[j-1,]
+        
+        previous_time_period<-previous_row$time_interval
+        next_previous_time_period<-next_previous_row$time_interval
+      
+        j<-j-1
+      }
+     df$previous_interval_use[i]<-total_previous_interval_use
+    }
+   else{
+      df$previous_interval_use[i]<-df$previous_interval_use[i-1]
+    }
+  }
+  return(df);
+}
+homeD_weather_electrical_2016_meter1_sep_clean_2<-previous_interval(homeD_weather_electrical_2016_meter1_sep_clean)
+
+homeD_clean <- homeD_weather_electrical_2016_meter1_sep_clean_2 #shorten this long name
+```
+
+
+```{r}
+homeD_weather_electrical_2016_meter1_clean <- homeD_weather_electrical_2016_meter1_sep_clean %>% unite(date,c("year","month","date"),sep="-") %>% unite(time_,c("hour","minute","second"),sep=":") %>% unite(time, c("date", "time_"),sep=" ") 
+```
+
