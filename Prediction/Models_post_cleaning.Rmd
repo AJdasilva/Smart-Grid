@@ -1,0 +1,210 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+Load Packages
+```{r}
+library(readr)
+library(plyr)
+library(lubridate)
+library(magrittr)
+library(dplyr)
+library(tidyr)
+library(tibbletime)
+library(ggplot2)
+library(randomForest)
+```
+I used the following function to find add the season of each observation to the data frame 
+```{r}
+
+season_period<-function(df){
+  
+  n <- nrow(df)
+  df$season<- rep(1,n)
+  for (i in 1:n) {
+    
+    row<-df[i,]
+    
+    if (3 <= row$month && row$month <= 4){
+      df$season[i] <- "spring"
+    }
+    else if(5<= row$month && row$month <= 9){
+      df$season[i]  <- "summer"
+    }
+    else if(10<= row$month && row$month <= 11){
+      df$season[i]  <- "fall"
+      }
+    else if(row$month==12 || (0<=row$month && row$month<=2)){
+      df$season[i]  <- "winter"
+    }
+  }
+  return(df);
+} 
+```
+
+
+```{r}
+homeD_clean <- readRDS("C:\\Users\\lance\\Documents\\R\\win-library\\3.4\\EnergyForcasting\\homeD_2016_clean_3.rds")
+colnames(homeD_clean)[16]<-"use_kW"
+
+homeD_clean$next_hour_use <- lead(homeD_clean$use_kW)
+homeD_clean$next_hour_temp <- lead(homeD_clean$temperature)
+homeD_clean$next_hour_humidity <- lead(homeD_clean$temperature)
+
+homeD_clean_morning <- homeD_clean %>% filter(time_interval == "morning")
+homeD_clean_afternoon <- homeD_clean %>% filter(time_interval == "afternoon")
+
+
+#homeD_clean_morning_nonsep <- homeD_clean_morning %>% #unite(date,c("year","month","date"),sep="-") %>% #unite(time_,c("hour","minute","second"),sep=":") %>% unite(time, #c(date,time_),sep=" ")
+#
+
+homeD_clean_morning_nonsep$time <- as_datetime(homeD_clean_morning_nonsep$time)
+
+homeD_clean_morning_nonsep<-as_tbl_time(homeD_clean_morning_nonsep,index=time)
+
+homeD_clean_morning_nonsep_daily<-homeD_clean_morning_nonsep %>% collapse_by("daily") %>% group_by(time) %>% summarise(daily_use = sum(use_kW),next_day_use =sum(next_hour_use),next_day_temp=mean(next_hour_temp),next_day_humidity=mean(next_hour_humidity))
+
+homeD_clean_morning_daily <-homeD_clean_morning_nonsep_daily %>% separate(time,c("date","time"),' ') %>% separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":") 
+
+homeD_clean_morning_daily<-season_period(homeD_clean_morning_daily)
+
+homeD_clean_morning_daily$season<-as.factor(homeD_clean_morning_daily$season) 
+
+homeD_clean_morning_nonsep_daily  <- homeD_clean_morning_daily %>% unite(date,c("year","month","date"),sep="-") %>% unite(time_,c("hour","minute","second"),sep=":") %>% unite(time, c(date,time_),sep=" ")
+```
+
+
+```{r}
+
+homeD_clean_afternoon_nonsep <-homeD_clean_afternoon
+homeD_clean_afternoon_nonsep$time <- as_datetime(homeD_clean_afternoon_nonsep$time)
+
+homeD_clean_afternoon_nonsep<-as_tbl_time(homeD_clean_afternoon_nonsep,index=time)
+
+homeD_clean_afternoon_nonsep_daily<-homeD_clean_afternoon_nonsep %>% collapse_by("daily") %>% group_by(time) %>% summarise(daily_use = sum(use_kW),next_day_use =sum(next_hour_use),next_day_temp=mean(next_hour_temp),next_day_humidity=mean(next_hour_humidity))
+
+homeD_clean_afternoon_daily <-homeD_clean_afternoon_nonsep_daily %>% separate(time,c("date","time"),' ') %>% separate(date,c("year","month","date"),"-") %>% separate(time,c("hour","minute","second"),":") 
+
+homeD_clean_afternoon_daily<-season_period(homeD_clean_afternoon_daily)
+
+homeD_clean_afternoon_daily$season<-as.factor(homeD_clean_afternoon_daily$season) 
+
+homeD_clean_afternoon_nonsep_daily  <- homeD_clean_afternoon_daily %>% unite(date,c("year","month","date"),sep="-") %>% unite(time_,c("hour","minute","second"),sep=":") %>% unite(time, c(date,time_),sep=" ")
+```
+
+
+regression modeling
+```{r}
+
+morning_model_1<-lm(log(next_day_use) ~ daily_use + season + next_day_temp + next_day_humidity,homeD_clean_morning_nonsep_daily)
+
+afternoon_model_1<-lm(log(next_day_use) ~ daily_use  + season + next_day_temp + next_day_humidity,homeD_clean_afternoon_nonsep_daily)
+
+```
+
+```{r}
+plot(resid(morning_model_1))
+```
+
+
+```{r}
+summary(morning_model_1)
+```
+
+
+```{r}
+summary(afternoon_model_1)
+```
+
+```{r}
+homeD_clean_morning_nonsep_daily$linear_predicted_use <- predict.lm(morning_model_1)
+
+ggplot(homeD_clean_morning_nonsep_daily, aes(time,daily_use,group=1))+geom_line(color="blue")+geom_line(aes(time,exp(linear_predicted_use)),color="red",group=1)+theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+ylim(c(0,50))+ggtitle("Morning Daily Use plot (lm predicted red, actual use [kW] blue) ")
+```
+
+
+#ggplot(homeD_clean_morning_nonsep[1:100,], #aes(time,use_kW,group=1))+geom_point(color="blue")+geom_point(aes(time,exp(linear_predicted_use),group=1),color=#"red")+ylim(0,2)+ggtitle("Jan 1- Jan 20, 2016 Morning Use plot (lm predicted red, actual use blue) #")+theme(axis.title.x=element_blank(),
+ #       axis.text.x=element_blank(),
+#        axis.ticks.x=element_blank())
+
+
+
+
+
+svm modeling
+```{r}
+library(e1071)
+
+homeD_clean_morning_nonsep_daily_winter<-homeD_clean_morning_nonsep_daily %>% filter(season == "winter")
+svm_morning_winter <- svm(next_day_use ~ daily_use +next_day_temp + next_day_humidity, data = homeD_clean_morning_nonsep_daily_winter[1:50,], kernel = "linear")
+
+pred <-predict(svm_morning_winter, homeD_clean_morning_nonsep_daily_winter[51:70,])
+homeD_clean_morning_winter_subset <- homeD_clean_morning_nonsep_daily_winter[51:70,]
+homeD_clean_morning_winter_subset$svm_pred <- pred
+
+ggplot(homeD_clean_morning_winter_subset, aes(time,daily_use,group=1))+geom_line(color="blue")+geom_line(aes(time,svm_pred,group=1),color="red")+ggtitle("Winter Morning Use[kW] Plot of Test Data (svm with Linear Kernel)")+labs(subtitle = "2/20/16-3/08/16, 20 Test points, 50 train points",caption = "Predicted Red, Actual Use Blue")+theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+```{r}
+homeD_clean_morning_nonsep_daily_winter<-homeD_clean_morning_nonsep_daily %>% filter(season == "winter")
+
+morning_model_1<-lm(log(next_day_use) ~ daily_use + next_day_temp + next_day_humidity,homeD_clean_morning_nonsep_daily_winter[1:50,])
+
+
+linear_predicted_use <- predict(morning_model_1,homeD_clean_morning_nonsep_daily_winter[51:70,])
+
+homeD_clean_morning_winter_subset <- homeD_clean_morning_nonsep_daily_winter[51:70,]
+
+homeD_clean_morning_winter_subset$svm_pred <- linear_predicted_use 
+
+ggplot(homeD_clean_morning_winter_subset, aes(time,daily_use,group=1))+geom_line(color="blue")+geom_line(aes(time,linear_predicted_use,group=1),color="red")+ggtitle("Winter Morning Use[kW] Plot of Test Data (Linear Regression")+labs(subtitle = "2/20/16-3/08/16, 20 Test points, 50 train points",caption = "Predicted Red, Actual Use Blue")+theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+```{r}
+homeD_clean_morning_nonsep_daily_winter<-homeD_clean_morning_nonsep_daily %>% filter(season == "winter")
+rf_morning_winter <- randomForest(next_day_use ~ daily_use +next_day_temp + next_day_humidity, data = homeD_clean_morning_nonsep_daily_winter[1:50,], kernel = "linear")
+
+pred <-predict(rf_morning_winter, homeD_clean_morning_nonsep_daily_winter[51:70,])
+homeD_clean_morning_winter_subset <- homeD_clean_morning_nonsep_daily_winter[51:70,]
+homeD_clean_morning_winter_subset$rf_pred <- pred
+
+ggplot(homeD_clean_morning_winter_subset, aes(time,daily_use,group=1))+geom_line(color="blue")+geom_line(aes(time,rf_pred,group=1),color="red")+ggtitle("Winter Morning Use[kW] Plot of Test Data (Random Forest)")+labs(subtitle = "2/20/16-3/08/16, 20 Test points, 50 train points",caption = "Predicted Red, Actual Use Blue")+theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+```{r}
+
+rf_morning <- randomForest(next_day_use ~ daily_use +next_day_temp + next_day_humidity , data = homeD_clean_morning_nonsep_daily[1:300,])
+
+
+pred <-predict(rf_morning, homeD_clean_morning_nonsep_daily[301:366,])
+homeD_clean_morning_subset <- homeD_clean_morning_nonsep_daily[301:366,]
+homeD_clean_morning_subset$rf_pred <- pred
+
+ggplot(homeD_clean_morning_subset, aes(time,daily_use,group=1))+geom_line(color="blue")+geom_line(aes(time,rf_pred,group=1),color="red")+ggtitle("Morning Use[kW] Plot of Test Data (Random Forest)")+labs(subtitle = "Train 1/01/16-10/26/16, Test 10/27/16-12/31/16, 66 Test points, 300 train points",caption = "Predicted Red, Actual Use Blue")+theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+```{r}
+rf_afternoon <- randomForest(next_day_use ~ daily_use +next_day_temp + next_day_humidity, data = homeD_clean_afternoon_nonsep_daily[1:300,])
+
+
+pred <-predict(rf_afternoon, homeD_clean_afternoon_nonsep_daily[301:366,])
+homeD_clean_afternoon_subset <- homeD_clean_afternoon_nonsep_daily[301:366,]
+homeD_clean_afternoon_subset$rf_pred <- pred
+
+ggplot(homeD_clean_afternoon_subset, aes(time,daily_use,group=1))+geom_line(color="blue")+geom_line(aes(time,rf_pred,group=1),color="red")+ggtitle("Afternoon Use[kW] Plot of Test Data (Random Forest)")+labs(subtitle = "Train 1/01/16-10/26/16, Test 10/27/16-12/31/16, 66 Test points, 300 train points",caption = "Predicted Red, Actual Use Blue")+theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
